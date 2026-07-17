@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="theme-color" content="#0f1923" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Traslados" />
+  <title>Traslados Aeropuerto</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --bg:        #0f1923;
+      --bg2:       #162030;
+      --bg3:       #1e2d3d;
+      --accent:    #00d4ff;
+      --accent2:   #ff9f1c;
+      --ok:        #00e676;
+      --warn:      #ffb300;
+      --danger:    #ff1744;
+      --text:      #e8f4f8;
+      --muted:     #6b8fa8;
+      --border:    #1e3a4a;
+      --card:      #162030;
+      --radius:    12px;
+      --font-head: 'Rajdhani', sans-serif;
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-head);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,25,35,.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex; align-items: center; gap: 12px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #0080aa);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    header h1 {
+      font-size: 1.1rem; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; line-height: 1.1;
+    }
+    header h1 span { color: var(--accent); }
+    .status-dot {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+      font-size: .7rem; font-family: var(--font-mono); color: var(--muted);
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--muted);
+      transition: background .3s;
+    }
+    .dot.online  { background: var(--ok);   box-shadow: 0 0 8px var(--ok); }
+    .dot.offline { background: var(--danger); }
+
+    main {
+      position: relative; z-index: 1;
+      max-width: 640px; margin: 0 auto;
+      padding: 16px 16px 100px;
+    }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 10px;
+      text-align: center;
+      animation: fadeUp .4s ease both;
+    }
+    .stat-card:nth-child(2) { animation-delay: .05s; }
+    .stat-card:nth-child(3) { animation-delay: .1s; }
+    .stat-num {
+      font-size: 1.7rem; font-weight: 700;
+      color: var(--accent); line-height: 1;
+    }
+    .stat-label {
+      font-size: .62rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .tabs {
+      display: flex; gap: 4px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 4px; margin-bottom: 16px;
+    }
+    .tab {
+      flex: 1; padding: 8px 4px;
+      background: none; border: none; color: var(--muted);
+      font-family: var(--font-head); font-size: .78rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .5px;
+      border-radius: 8px; cursor: pointer;
+      transition: all .2s;
+    }
+    .tab.active { background: var(--accent); color: var(--bg); }
+
+    .search-wrap { position: relative; margin-bottom: 14px; }
+    .search-wrap input {
+      width: 100%;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font-mono); font-size: .85rem;
+      padding: 10px 10px 10px 38px;
+      outline: none; transition: border-color .2s;
+    }
+    .search-wrap input:focus { border-color: var(--accent); }
+    .search-wrap::before {
+      content: '🔍';
+      position: absolute; left: 12px; top: 50%;
+      transform: translateY(-50%); font-size: .85rem;
+    }
+
+    /* ── Trip list ── */
+    .trip-list { display: flex; flex-direction: column; gap: 8px; }
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty .icon { font-size: 2.6rem; margin-bottom: 10px; }
+
+    .trip-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--muted);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer; transition: all .2s;
+      animation: fadeUp .3s ease both;
+    }
+    .trip-card:active { transform: scale(.98); }
+    .trip-card.hoy      { border-left-color: var(--danger); }
+    .trip-card.pronto   { border-left-color: var(--warn); }
+    .trip-card.normal   { border-left-color: var(--ok); }
+    .trip-card.cancelado{ border-left-color: var(--muted); opacity: .55; }
+    .trip-card.completado{ border-left-color: var(--muted); opacity: .7; }
+
+    .trip-icon {
+      width: 40px; height: 40px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; flex-shrink: 0;
+      background: var(--bg3);
+    }
+    .trip-info { flex: 1; min-width: 0; }
+    .trip-pax {
+      font-size: .98rem; font-weight: 700;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .trip-ruta {
+      font-family: var(--font-mono); font-size: .68rem;
+      color: var(--muted); letter-spacing: .3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .trip-vuelo {
+      font-family: var(--font-mono); font-size: .68rem;
+      color: var(--accent2); margin-top: 2px;
+    }
+    .trip-fecha {
+      font-family: var(--font-mono); font-size: .72rem;
+      font-weight: 500; text-align: right; flex-shrink: 0;
+    }
+    .trip-fecha .dia  { color: var(--accent); font-size: .95rem; font-weight: 700; }
+    .trip-fecha .hora { color: var(--muted); font-size: .68rem; }
+    .badge {
+      font-size: .58rem; font-weight: 700;
+      padding: 2px 6px; border-radius: 4px;
+      text-transform: uppercase; letter-spacing: .5px;
+      margin-top: 3px; display: inline-block;
+    }
+    .badge.hoy       { background: rgba(255,23,68,.15); color: var(--danger); }
+    .badge.pronto    { background: rgba(255,179,0,.15);  color: var(--warn); }
+    .badge.normal    { background: rgba(0,230,118,.15);  color: var(--ok); }
+    .badge.cancelado { background: rgba(107,143,168,.15); color: var(--muted); }
+    .badge.completado{ background: rgba(107,143,168,.15); color: var(--muted); }
+
+    /* ── Calendar ── */
+    .cal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .cal-header button {
+      background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+      width: 36px; height: 36px; border-radius: 8px; font-size: 1rem; cursor: pointer;
+    }
+    .cal-title { font-size: 1.1rem; font-weight: 700; text-transform: capitalize; }
+    .cal-grid {
+      display: grid; grid-template-columns: repeat(7, 1fr);
+      gap: 4px; margin-bottom: 18px;
+    }
+    .cal-dow {
+      text-align: center; font-size: .6rem; color: var(--muted);
+      text-transform: uppercase; padding-bottom: 4px; font-family: var(--font-mono);
+    }
+    .cal-day {
+      aspect-ratio: 1; background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 8px; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; cursor: pointer; position: relative; font-size: .8rem;
+      transition: all .15s;
+    }
+    .cal-day.empty { background: none; border: none; cursor: default; }
+    .cal-day.today { border-color: var(--accent); }
+    .cal-day.selected { background: var(--accent); color: var(--bg); font-weight: 700; }
+    .cal-day .n { font-weight: 600; }
+    .cal-day .dots { display: flex; gap: 2px; margin-top: 2px; }
+    .cal-day .dots span { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
+    .cal-day.selected .dots span { background: var(--bg); }
+    .cal-daylist-title {
+      font-size: .8rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 1px; margin-bottom: 10px; font-family: var(--font-mono);
+    }
+
+    /* ── FAB ── */
+    .fab {
+      position: fixed; bottom: 24px; right: 20px; z-index: 90;
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #0080aa);
+      border: none; color: var(--bg); font-size: 1.6rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; box-shadow: 0 4px 20px rgba(0,212,255,.4);
+      transition: transform .15s;
+    }
+    .fab:active { transform: scale(.92); }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(5,10,15,.7);
+      backdrop-filter: blur(4px); z-index: 200;
+      display: flex; align-items: flex-end; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity .25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: 18px 18px 0 0; width: 100%; max-width: 640px;
+      max-height: 88vh; overflow-y: auto; padding: 22px 20px 30px;
+      transform: translateY(30px); transition: transform .25s;
+    }
+    .modal-overlay.open .modal { transform: translateY(0); }
+    .modal-title {
+      font-size: 1.2rem; font-weight: 700; margin-bottom: 18px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-title button {
+      background: none; border: none; color: var(--muted); font-size: 1.3rem; cursor: pointer;
+    }
+    .field { margin-bottom: 14px; }
+    .field label {
+      display: block; font-size: .68rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;
+      font-family: var(--font-mono);
+    }
+    .field input, .field select, .field textarea {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-family: var(--font-head);
+      font-size: .95rem; padding: 10px 12px; outline: none; transition: border-color .2s;
+    }
+    .field textarea { resize: vertical; min-height: 60px; font-family: var(--font-head); }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .btn {
+      flex: 1; padding: 13px; border-radius: 10px; border: none;
+      font-family: var(--font-head); font-weight: 700; font-size: .9rem;
+      text-transform: uppercase; letter-spacing: .5px; cursor: pointer;
+      transition: opacity .15s;
+    }
+    .btn:active { opacity: .8; }
+    .btn-primary { background: var(--accent); color: var(--bg); }
+    .btn-danger  { background: rgba(255,23,68,.15); color: var(--danger); }
+    .btn-ghost   { background: var(--bg3); color: var(--text); }
+
+    .detail-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid var(--border); font-size: .88rem;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-row span:first-child { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .5px; }
+    .detail-row span:last-child { font-weight: 600; text-align: right; max-width: 60%; }
+
+    .config-section {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+    }
+    .config-section h3 { font-size: .85rem; margin-bottom: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; }
+    .info-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: .85rem; color: var(--muted); }
+    .info-row span:last-child { color: var(--text); }
+
+    .toast {
+      position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 20px; font-size: .85rem; z-index: 300; opacity: 0; pointer-events: none;
+      transition: all .3s;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    .toast.success { border-color: var(--ok); }
+    .toast.error { border-color: var(--danger); }
+
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">✈️</div>
+  <h1>Traslados<br><span>Aeropuerto · Hotel · Empresa</span></h1>
+  <div class="status-dot">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">conectando…</span>
+  </div>
+</header>
+
+<main>
+  <div class="stats" id="statsBox"></div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('proximos', this)">Próximos</button>
+    <button class="tab" onclick="switchTab('calendario', this)">Calendario</button>
+    <button class="tab" onclick="switchTab('todos', this)">Todos</button>
+    <button class="tab" onclick="switchTab('config', this)">⚙️</button>
+  </div>
+
+  <div class="search-wrap" id="searchWrap">
+    <input type="text" id="searchInput" placeholder="Buscar por pasajero, vuelo, destino…" oninput="renderTab()" />
+  </div>
+
+  <div id="mainContent"></div>
+</main>
+
+<button class="fab" id="fabBtn">+</button>
+
+<!-- Modal: formulario -->
+<div class="modal-overlay" id="formModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="formTitle">Nuevo Traslado</span>
+      <button onclick="cerrarModal('formModal')">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Pasajero(s)</label>
+      <input type="text" id="inputPax" placeholder="Ej: Juan Pérez, María Gómez" />
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Tipo de traslado</label>
+        <select id="inputTipo">
+          <option value="aeropuerto-hotel">Aeropuerto → Hotel</option>
+          <option value="aeropuerto-empresa">Aeropuerto → Empresa</option>
+          <option value="hotel-aeropuerto">Hotel → Aeropuerto</option>
+          <option value="empresa-aeropuerto">Empresa → Aeropuerto</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>N° de vuelo (opcional)</label>
+        <input type="text" id="inputVuelo" placeholder="Ej: AA1234" />
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Fecha</label>
+        <input type="date" id="inputFecha" />
+      </div>
+      <div class="field">
+        <label>Hora</label>
+        <input type="time" id="inputHora" />
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Origen</label>
+        <input type="text" id="inputOrigen" placeholder="Ej: Aeropuerto SJO" />
+      </div>
+      <div class="field">
+        <label>Destino</label>
+        <input type="text" id="inputDestino" placeholder="Ej: Hotel Presidente" />
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label>Conductor (opcional)</label>
+        <input type="text" id="inputConductor" placeholder="Ej: Carlos R." />
+      </div>
+      <div class="field">
+        <label>Vehículo (opcional)</label>
+        <input type="text" id="inputVehiculo" placeholder="Ej: Van placa CRC123" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Estado</label>
+      <select id="inputEstado">
+        <option value="pendiente">Pendiente</option>
+        <option value="completado">Completado</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label>Notas (opcional)</label>
+      <textarea id="inputNotas" placeholder="Ej: hotel de conexión, número de personas, contacto, equipaje especial…"></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal('formModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarTraslado()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalle -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Detalle del traslado</span>
+      <button onclick="cerrarModal('detailModal')">✕</button>
+    </div>
+    <div id="detailBody"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="eliminarTraslado()">Eliminar</button>
+      <button class="btn btn-primary" onclick="editarTraslado()">Editar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp }                          from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, signInAnonymously,
+           onAuthStateChanged }                      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, collection, getDocs,
+           doc, setDoc, deleteDoc, addDoc,
+           onSnapshot }                              from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  // ── 🔧 CONFIGURACIÓN — reemplaza con los datos de TU proyecto de Firebase ──
+  const firebaseConfig = {
+    apiKey:            "TU_API_KEY",
+    authDomain:        "tu-proyecto.firebaseapp.com",
+    projectId:         "tu-proyecto",
+    storageBucket:     "tu-proyecto.firebasestorage.app",
+    messagingSenderId: "000000000000",
+    appId:             "1:000000000000:web:xxxxxxxxxxxxxxxxxxxxxx"
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const app  = initializeApp(firebaseConfig);
+  const db   = getFirestore(app);
+  const auth = getAuth(app);
+
+  onAuthStateChanged(auth, user => {
+    if (!user) { signInAnonymously(auth).catch(e => { console.error(e); setStatus(false); }); }
+  });
+
+  const TIPOS = {
+    'aeropuerto-hotel':   { label: 'Aeropuerto → Hotel',   icon: '🏨' },
+    'aeropuerto-empresa': { label: 'Aeropuerto → Empresa', icon: '🏢' },
+    'hotel-aeropuerto':   { label: 'Hotel → Aeropuerto',   icon: '✈️' },
+    'empresa-aeropuerto': { label: 'Empresa → Aeropuerto', icon: '✈️' },
+    'otro':               { label: 'Otro',                 icon: '🚐' }
+  };
+  const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const MESES_L = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+  let traslados   = {};   // id -> data
+  let tabActual    = 'proximos';
+  let idActual     = null;
+  let modoEdicion  = false;
+  let calMes, calAnio, diaSeleccionado = null;
+  { const h = new Date(); calMes = h.getMonth(); calAnio = h.getFullYear(); }
+
+  // ── Realtime listener ────────────────────────────────────────────────────
+  onSnapshot(collection(db, "traslados"), snap => {
+    traslados = {};
+    snap.forEach(d => traslados[d.id] = d.data());
+    setStatus(true);
+    renderTab();
+  }, err => {
+    setStatus(false);
+    console.error(err);
+  });
+
+  function setStatus(online) {
+    const dot  = document.getElementById('statusDot');
+    const text = document.getElementById('statusText');
+    dot.className  = 'dot ' + (online ? 'online' : 'offline');
+    text.textContent = online ? 'en línea' : 'sin conexión';
+  }
+
+  // ── Helpers de fecha ─────────────────────────────────────────────────────
+  function hoyISO() {
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}-${String(h.getDate()).padStart(2,'0')}`;
+  }
+  function diffDias(fechaISO) {
+    const [y,m,d] = fechaISO.split('-').map(Number);
+    const f = new Date(y, m-1, d);
+    const h = new Date(); h.setHours(0,0,0,0);
+    return Math.round((f - h) / 86400000);
+  }
+  function urgency(t) {
+    if (t.estado === 'cancelado' || t.estado === 'completado') return t.estado;
+    const dd = diffDias(t.fecha);
+    if (dd <= 0) return 'hoy';
+    if (dd <= 2) return 'pronto';
+    return 'normal';
+  }
+  function badgeText(u) {
+    return { hoy:'Hoy', pronto:'Pronto', normal:'Programado', cancelado:'Cancelado', completado:'Completado' }[u];
+  }
+  function fmtFechaCorta(fechaISO) {
+    const [y,m,d] = fechaISO.split('-').map(Number);
+    return { dia: String(d).padStart(2,'0'), mes: MESES_L[m-1].slice(0,3).toUpperCase() };
+  }
+
+  // ── Render principal ─────────────────────────────────────────────────────
+  function renderTab() {
+    document.getElementById('fabBtn').style.display = tab_visible(tabActual);
+    document.getElementById('searchWrap').style.display = (tabActual==='config') ? 'none' : '';
+
+    if (tabActual === 'config') { renderConfig(); renderStats(); return; }
+    if (tabActual === 'calendario') { renderCalendario(); renderStats(); return; }
+
+    const q = (document.getElementById('searchInput').value || '').toLowerCase();
+    let lista = Object.entries(traslados);
+
+    if (tabActual === 'proximos') {
+      // Pendientes de hoy en adelante (incluye los de hoy aunque ya haya pasado la hora)
+      lista = lista.filter(([,t]) => t.estado === 'pendiente' && diffDias(t.fecha) >= 0);
+    }
+    // tabActual === 'todos' -> sin filtro adicional, muestra pendientes/completados/cancelados
+
+    if (q) {
+      lista = lista.filter(([,t]) => {
+        const blob = [t.pasajeros,t.vuelo,t.origen,t.destino,t.conductor,t.vehiculo,t.notas].join(' ').toLowerCase();
+        return blob.includes(q);
+      });
+    }
+
+    lista.sort(([,a],[,b]) => (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+
+    document.getElementById('mainContent').innerHTML = renderLista(lista);
+    renderStats();
+  }
+
+  function tab_visible(tab) { return tab === 'config' ? 'none' : ''; }
+
+  function renderLista(lista) {
+    if (lista.length === 0) {
+      return `<div class="empty"><div class="icon">🧳</div><p>No hay traslados aquí</p></div>`;
+    }
+    return `<div class="trip-list">${lista.map(([id,t],i) => tripCardHTML(id,t,i)).join('')}</div>`;
+  }
+
+  function tripCardHTML(id, t, i) {
+    const u = urgency(t);
+    const { dia, mes } = fmtFechaCorta(t.fecha);
+    const tipo = TIPOS[t.tipo] || TIPOS.otro;
+    return `<div class="trip-card ${u}" style="animation-delay:${i*0.03}s" onclick="abrirDetalle('${id}')">
+      <div class="trip-icon">${tipo.icon}</div>
+      <div class="trip-info">
+        <div class="trip-pax">${escapeHtml(t.pasajeros || 'Sin nombre')}</div>
+        <div class="trip-ruta">${escapeHtml(t.origen||'')} → ${escapeHtml(t.destino||'')}</div>
+        ${t.vuelo ? `<div class="trip-vuelo">✈️ Vuelo ${escapeHtml(t.vuelo)}</div>` : ''}
+        <span class="badge ${u}">${badgeText(u)}</span>
+      </div>
+      <div class="trip-fecha">
+        <div class="dia">${dia} ${mes}</div>
+        <div class="hora">${t.hora || ''}</div>
+      </div>
+    </div>`;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+  function renderStats() {
+    const total = Object.keys(traslados).length;
+    const hoyN  = Object.values(traslados).filter(t => t.estado==='pendiente' && diffDias(t.fecha)===0).length;
+    const semN  = Object.values(traslados).filter(t => t.estado==='pendiente' && diffDias(t.fecha)>=0 && diffDias(t.fecha)<=7).length;
+    document.getElementById('statsBox').innerHTML = `
+      <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">Total</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${hoyN}</div><div class="stat-label">Hoy</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--warn)">${semN}</div><div class="stat-label">Esta semana</div></div>
+    `;
+  }
+
+  // ── Calendario ────────────────────────────────────────────────────────────
+  function renderCalendario() {
+    const primerDia = new Date(calAnio, calMes, 1);
+    const inicioSemana = primerDia.getDay();
+    const diasEnMes = new Date(calAnio, calMes+1, 0).getDate();
+    const hoy = hoyISO();
+
+    const porDia = {};
+    Object.entries(traslados).forEach(([id,t]) => {
+      if (t.estado !== 'pendiente') return;
+      (porDia[t.fecha] ||= []).push([id,t]);
+    });
+
+    let celdas = '';
+    for (let i=0;i<inicioSemana;i++) celdas += `<div class="cal-day empty"></div>`;
+    for (let d=1; d<=diasEnMes; d++) {
+      const iso = `${calAnio}-${String(calMes+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const n = (porDia[iso]||[]).length;
+      const cls = ['cal-day'];
+      if (iso === hoy) cls.push('today');
+      if (iso === diaSeleccionado) cls.push('selected');
+      celdas += `<div class="${cls.join(' ')}" onclick="seleccionarDia('${iso}')">
+        <div class="n">${d}</div>
+        ${n ? `<div class="dots">${Array.from({length:Math.min(n,3)}).map(()=>'<span></span>').join('')}</div>` : ''}
+      </div>`;
+    }
+
+    let listaDia = '';
+    if (diaSeleccionado) {
+      const items = (porDia[diaSeleccionado]||[]).sort((a,b)=>a[1].hora.localeCompare(b[1].hora));
+      const [y,m,d] = diaSeleccionado.split('-').map(Number);
+      const titulo = `${d} de ${MESES_L[m-1]}`;
+      listaDia = `<div class="cal-daylist-title">Traslados — ${titulo}</div>${renderLista(items)}`;
+    } else {
+      listaDia = `<div class="empty"><div class="icon">📅</div><p>Toca un día para ver sus traslados</p></div>`;
+    }
+
+    document.getElementById('mainContent').innerHTML = `
+      <div class="cal-header">
+        <button onclick="cambiarMes(-1)">‹</button>
+        <div class="cal-title">${MESES_L[calMes]} ${calAnio}</div>
+        <button onclick="cambiarMes(1)">›</button>
+      </div>
+      <div class="cal-grid">
+        ${DOW.map(d=>`<div class="cal-dow">${d}</div>`).join('')}
+        ${celdas}
+      </div>
+      ${listaDia}
+    `;
+  }
+
+  window.cambiarMes = function(delta) {
+    calMes += delta;
+    if (calMes < 0) { calMes = 11; calAnio--; }
+    if (calMes > 11) { calMes = 0; calAnio++; }
+    renderCalendario();
+  };
+  window.seleccionarDia = function(iso) {
+    diaSeleccionado = (diaSeleccionado === iso) ? null : iso;
+    renderCalendario();
+  };
+
+  // ── Config ────────────────────────────────────────────────────────────────
+  function renderConfig() {
+    const total = Object.keys(traslados).length;
+    document.getElementById('mainContent').innerHTML = `
+      <div class="config-section">
+        <h3>Estado del sistema</h3>
+        <div class="info-row"><span>Traslados registrados</span><span>${total}</span></div>
+        <div class="info-row"><span>Base de datos</span><span>Firebase Firestore</span></div>
+        <div class="info-row"><span>Sincronización</span><span>Tiempo real</span></div>
+      </div>
+      <div class="config-section">
+        <h3>Instalar como app</h3>
+        <div class="info-row"><span>Android</span><span>Menú ⋮ → Instalar app</span></div>
+        <div class="info-row"><span>iPhone</span><span>Compartir → Pantalla inicio</span></div>
+      </div>
+    `;
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+  window.switchTab = function(tab, btn) {
+    tabActual = tab;
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderTab();
+  };
+
+  // ── Detalle ───────────────────────────────────────────────────────────────
+  window.abrirDetalle = function(id) {
+    idActual = id;
+    const t = traslados[id];
+    const u = urgency(t);
+    const tipo = TIPOS[t.tipo] || TIPOS.otro;
+    document.getElementById('detailBody').innerHTML = `
+      <div class="detail-row"><span>Pasajero(s)</span><span>${escapeHtml(t.pasajeros||'—')}</span></div>
+      <div class="detail-row"><span>Tipo</span><span>${tipo.icon} ${tipo.label}</span></div>
+      <div class="detail-row"><span>Fecha</span><span>${t.fecha} · ${t.hora||'--:--'}</span></div>
+      ${t.vuelo ? `<div class="detail-row"><span>Vuelo</span><span>${escapeHtml(t.vuelo)}</span></div>` : ''}
+      <div class="detail-row"><span>Origen</span><span>${escapeHtml(t.origen||'—')}</span></div>
+      <div class="detail-row"><span>Destino</span><span>${escapeHtml(t.destino||'—')}</span></div>
+      ${t.conductor ? `<div class="detail-row"><span>Conductor</span><span>${escapeHtml(t.conductor)}</span></div>` : ''}
+      ${t.vehiculo ? `<div class="detail-row"><span>Vehículo</span><span>${escapeHtml(t.vehiculo)}</span></div>` : ''}
+      <div class="detail-row"><span>Estado</span><span><span class="badge ${u}">${badgeText(u)}</span></span></div>
+      ${t.notas ? `<div class="detail-row"><span>Notas</span><span>${escapeHtml(t.notas)}</span></div>` : ''}
+    `;
+    abrirModal('detailModal');
+  };
+
+  // ── Guardar (crear o editar) ─────────────────────────────────────────────
+  window.guardarTraslado = async function() {
+    const data = {
+      pasajeros:  document.getElementById('inputPax').value.trim(),
+      tipo:       document.getElementById('inputTipo').value,
+      vuelo:      document.getElementById('inputVuelo').value.trim(),
+      fecha:      document.getElementById('inputFecha').value,
+      hora:       document.getElementById('inputHora').value,
+      origen:     document.getElementById('inputOrigen').value.trim(),
+      destino:    document.getElementById('inputDestino').value.trim(),
+      conductor:  document.getElementById('inputConductor').value.trim(),
+      vehiculo:   document.getElementById('inputVehiculo').value.trim(),
+      estado:     document.getElementById('inputEstado').value,
+      notas:      document.getElementById('inputNotas').value.trim(),
+    };
+    if (!data.pasajeros || !data.fecha || !data.hora || !data.origen || !data.destino) {
+      toast('Completa pasajero, fecha, hora, origen y destino', 'error'); return;
+    }
+    try {
+      if (modoEdicion && idActual) {
+        await setDoc(doc(db,'traslados',idActual), data);
+        toast('✅ Traslado actualizado', 'success');
+      } else {
+        await addDoc(collection(db,'traslados'), data);
+        toast('✅ Traslado agregado', 'success');
+      }
+      cerrarModal('formModal');
+    } catch (e) {
+      console.error(e);
+      toast('❌ Error al guardar', 'error');
+    }
+  };
+
+  window.editarTraslado = function() {
+    const t = traslados[idActual];
+    modoEdicion = true;
+    cerrarModal('detailModal');
+    setTimeout(() => {
+      document.getElementById('formTitle').textContent = 'Editar Traslado';
+      document.getElementById('inputPax').value       = t.pasajeros || '';
+      document.getElementById('inputTipo').value      = t.tipo || 'aeropuerto-hotel';
+      document.getElementById('inputVuelo').value     = t.vuelo || '';
+      document.getElementById('inputFecha').value     = t.fecha || '';
+      document.getElementById('inputHora').value      = t.hora || '';
+      document.getElementById('inputOrigen').value    = t.origen || '';
+      document.getElementById('inputDestino').value   = t.destino || '';
+      document.getElementById('inputConductor').value = t.conductor || '';
+      document.getElementById('inputVehiculo').value  = t.vehiculo || '';
+      document.getElementById('inputEstado').value    = t.estado || 'pendiente';
+      document.getElementById('inputNotas').value     = t.notas || '';
+      abrirModal('formModal');
+    }, 250);
+  };
+
+  window.eliminarTraslado = async function() {
+    if (!confirm('¿Eliminar este traslado?')) return;
+    await deleteDoc(doc(db,'traslados',idActual));
+    cerrarModal('detailModal');
+    toast('🗑️ Traslado eliminado', 'error');
+  };
+
+  function limpiarForm() {
+    ['inputPax','inputVuelo','inputFecha','inputHora','inputOrigen','inputDestino','inputConductor','inputVehiculo','inputNotas']
+      .forEach(id => document.getElementById(id).value = '');
+    document.getElementById('inputTipo').value = 'aeropuerto-hotel';
+    document.getElementById('inputEstado').value = 'pendiente';
+    document.getElementById('formTitle').textContent = 'Nuevo Traslado';
+    modoEdicion = false;
+    idActual = null;
+  }
+
+  // ── Modal helpers ─────────────────────────────────────────────────────────
+  window.abrirModal  = id => document.getElementById(id).classList.add('open');
+  window.cerrarModal = id => { document.getElementById(id).classList.remove('open'); if (id==='formModal') limpiarForm(); };
+
+  document.querySelectorAll('.modal-overlay').forEach(o =>
+    o.addEventListener('click', e => { if (e.target === o) cerrarModal(o.id); })
+  );
+
+  document.getElementById('fabBtn').onclick = () => {
+    limpiarForm();
+    document.getElementById('inputFecha').value = hoyISO();
+    abrirModal('formModal');
+  };
+
+  // ── Toast ─────────────────────────────────────────────────────────────────
+  function toast(msg, type='success') {
+    const t = document.getElementById('toast');
+    t.textContent  = msg;
+    t.className    = `toast ${type} show`;
+    setTimeout(() => t.classList.remove('show'), 2800);
+  }
+</script>
+</body>
+</html>

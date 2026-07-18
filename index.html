@@ -131,10 +131,10 @@
       padding: 4px; margin-bottom: 16px;
     }
     .tab {
-      flex: 1; padding: 8px 4px;
+      flex: 1; padding: 8px 2px;
       background: none; border: none; color: var(--muted);
-      font-family: var(--font-head); font-size: .78rem; font-weight: 600;
-      text-transform: uppercase; letter-spacing: .5px;
+      font-family: var(--font-head); font-size: .7rem; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .3px;
       border-radius: 8px; cursor: pointer;
       transition: all .2s;
     }
@@ -368,6 +368,24 @@
     .info-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: .85rem; color: var(--muted); }
     .info-row span:last-child { color: var(--text); }
 
+    /* ── Passenger cards ── */
+    .pax-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+      cursor: pointer; transition: all .2s; animation: fadeUp .3s ease both;
+    }
+    .pax-card:active { transform: scale(.98); }
+    .pax-avatar {
+      width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--accent), #0080aa);
+      color: var(--bg); display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 1rem;
+    }
+    .pax-card-info { flex: 1; min-width: 0; }
+    .pax-card-name { font-size: .95rem; font-weight: 700; }
+    .pax-card-meta { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); margin-top: 2px; }
+    .pax-card-trips { font-size: .65rem; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
+
     .toast {
       position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
       background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
@@ -399,6 +417,7 @@
     <button class="tab active" onclick="switchTab('proximos', this)">Próximos</button>
     <button class="tab" onclick="switchTab('calendario', this)">Calendario</button>
     <button class="tab" onclick="switchTab('todos', this)">Todos</button>
+    <button class="tab" onclick="switchTab('pasajeros', this)">Pasajeros</button>
     <button class="tab" onclick="switchTab('config', this)">⚙️</button>
   </div>
 
@@ -491,6 +510,56 @@
     <div class="btn-row">
       <button class="btn btn-danger" onclick="eliminarTraslado()">Eliminar</button>
       <button class="btn btn-primary" onclick="editarTraslado()">Editar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: perfil de pasajero -->
+<div class="modal-overlay" id="paxModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="paxFormTitle">Nuevo Pasajero</span>
+      <button onclick="cerrarModal('paxModal')">✕</button>
+    </div>
+
+    <div class="field">
+      <label>Nombre completo</label>
+      <input type="text" id="inputPaxNombre" placeholder="Ej: Juan Pérez" />
+    </div>
+
+    <div class="field">
+      <label>Número de celular (opcional)</label>
+      <input type="tel" id="inputPaxTelefono" placeholder="Ej: +506 8888 8888" />
+    </div>
+
+    <div class="field">
+      <label>País de origen (opcional)</label>
+      <input type="text" id="inputPaxPais" placeholder="Ej: Estados Unidos" />
+    </div>
+
+    <div class="field">
+      <label>Notas (opcional)</label>
+      <textarea id="inputPaxNotas" placeholder="Ej: alergias, preferencias, empresa a la que pertenece…"></textarea>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="cerrarModal('paxModal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPasajeroPerfil()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: detalle de pasajero -->
+<div class="modal-overlay" id="paxDetailModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span>Perfil del pasajero</span>
+      <button onclick="cerrarModal('paxDetailModal')">✕</button>
+    </div>
+    <div id="paxDetailBody"></div>
+    <div class="btn-row">
+      <button class="btn btn-danger" onclick="eliminarPasajeroPerfil()">Eliminar</button>
+      <button class="btn btn-primary" onclick="editarPasajeroPerfil()">Editar</button>
     </div>
   </div>
 </div>
@@ -597,9 +666,12 @@
   function renderTab() {
     document.getElementById('fabBtn').style.display = tab_visible(tabActual);
     document.getElementById('searchWrap').style.display = (tabActual==='config') ? 'none' : '';
+    document.getElementById('searchInput').placeholder = (tabActual==='pasajeros')
+      ? 'Buscar por nombre o teléfono…' : 'Buscar por pasajero, vuelo, destino…';
 
     if (tabActual === 'config') { renderConfig(); renderStats(); return; }
     if (tabActual === 'calendario') { renderCalendario(); renderStats(); return; }
+    if (tabActual === 'pasajeros') { renderPasajerosTab(); renderStats(); return; }
 
     const q = (document.getElementById('searchInput').value || '').toLowerCase();
     let lista = Object.entries(traslados);
@@ -623,7 +695,101 @@
     renderStats();
   }
 
-  function tab_visible(tab) { return tab === 'config' ? 'none' : ''; }
+  function tab_visible(tab) { return (tab === 'config') ? 'none' : ''; }
+
+  // ── Pestaña de Pasajeros ─────────────────────────────────────────────────
+  function renderPasajerosTab() {
+    const q = (document.getElementById('searchInput').value || '').toLowerCase();
+    let lista = Object.entries(pasajerosDB);
+    if (q) {
+      lista = lista.filter(([,p]) => (p.nombre||'').toLowerCase().includes(q) || (p.telefono||'').includes(q));
+    }
+    lista.sort(([,a],[,b]) => (a.nombre||'').localeCompare(b.nombre||''));
+
+    if (lista.length === 0) {
+      document.getElementById('mainContent').innerHTML = `<div class="empty"><div class="icon">👤</div><p>No hay pasajeros registrados aún</p></div>`;
+      return;
+    }
+
+    document.getElementById('mainContent').innerHTML = `<div class="trip-list">${
+      lista.map(([id,p],i) => {
+        const iniciales = (p.nombre||'?').trim().split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
+        const nViajes = Object.values(traslados).filter(t => (t.paxIds||[]).includes(id)).length;
+        return `<div class="pax-card" style="animation-delay:${i*0.03}s" onclick="abrirDetallePasajero('${id}')">
+          <div class="pax-avatar">${iniciales}</div>
+          <div class="pax-card-info">
+            <div class="pax-card-name">${escapeHtml(p.nombre||'Sin nombre')}</div>
+            ${p.telefono ? `<div class="pax-card-meta">📱 ${escapeHtml(p.telefono)}</div>` : ''}
+            ${p.pais ? `<div class="pax-card-meta">🌎 ${escapeHtml(p.pais)}</div>` : ''}
+            <div class="pax-card-trips">${nViajes} viaje${nViajes===1?'':'s'}</div>
+          </div>
+        </div>`;
+      }).join('')
+    }</div>`;
+  }
+
+  window.abrirDetallePasajero = function(id) {
+    idActual = id;
+    const p = pasajerosDB[id];
+    const nViajes = Object.values(traslados).filter(t => (t.paxIds||[]).includes(id)).length;
+    document.getElementById('paxDetailBody').innerHTML = `
+      <div class="detail-row"><span>Nombre</span><span>${escapeHtml(p.nombre||'—')}</span></div>
+      <div class="detail-row"><span>Celular</span><span>${escapeHtml(p.telefono||'—')}</span></div>
+      <div class="detail-row"><span>País de origen</span><span>${escapeHtml(p.pais||'—')}</span></div>
+      ${p.notas ? `<div class="detail-row"><span>Notas</span><span>${escapeHtml(p.notas)}</span></div>` : ''}
+      <div class="detail-row"><span>Viajes registrados</span><span>${nViajes}</span></div>
+    `;
+    abrirModal('paxDetailModal');
+  };
+
+  window.editarPasajeroPerfil = function() {
+    const p = pasajerosDB[idActual];
+    cerrarModal('paxDetailModal');
+    setTimeout(() => {
+      document.getElementById('paxFormTitle').textContent = 'Editar Pasajero';
+      document.getElementById('inputPaxNombre').value   = p.nombre || '';
+      document.getElementById('inputPaxTelefono').value = p.telefono || '';
+      document.getElementById('inputPaxPais').value     = p.pais || '';
+      document.getElementById('inputPaxNotas').value    = p.notas || '';
+      abrirModal('paxModal');
+    }, 250);
+  };
+
+  window.guardarPasajeroPerfil = async function() {
+    const nombre = document.getElementById('inputPaxNombre').value.trim();
+    if (!nombre) { toast('Escribe el nombre del pasajero', 'error'); return; }
+    const data = {
+      nombre,
+      telefono: document.getElementById('inputPaxTelefono').value.trim(),
+      pais:     document.getElementById('inputPaxPais').value.trim(),
+      notas:    document.getElementById('inputPaxNotas').value.trim(),
+    };
+    try {
+      if (idActual && pasajerosDB[idActual] && document.getElementById('paxFormTitle').textContent === 'Editar Pasajero') {
+        await updateDoc(doc(db,'pasajeros',idActual), data);
+        toast('✅ Pasajero actualizado', 'success');
+      } else {
+        await addDoc(collection(db,'pasajeros'), data);
+        toast('✅ Pasajero agregado', 'success');
+      }
+      cerrarModal('paxModal');
+    } catch(e) {
+      console.error(e);
+      toast('❌ Error al guardar pasajero', 'error');
+    }
+  };
+
+  window.eliminarPasajeroPerfil = async function() {
+    const nViajes = Object.values(traslados).filter(t => (t.paxIds||[]).includes(idActual)).length;
+    const msg = nViajes > 0
+      ? `Este pasajero tiene ${nViajes} viaje(s) registrado(s). Se eliminará su perfil pero los viajes quedarán con el nombre guardado. ¿Continuar?`
+      : '¿Eliminar este pasajero?';
+    if (!confirm(msg)) return;
+    await deleteDoc(doc(db,'pasajeros',idActual));
+    cerrarModal('paxDetailModal');
+    toast('🗑️ Pasajero eliminado', 'error');
+  };
+
 
   function renderLista(lista) {
     if (lista.length === 0) {
@@ -942,9 +1108,16 @@
   );
 
   document.getElementById('fabBtn').onclick = () => {
-    limpiarForm();
-    document.getElementById('inputFecha').value = hoyISO();
-    abrirModal('formModal');
+    if (tabActual === 'pasajeros') {
+      document.getElementById('paxFormTitle').textContent = 'Nuevo Pasajero';
+      ['inputPaxNombre','inputPaxTelefono','inputPaxPais','inputPaxNotas'].forEach(id => document.getElementById(id).value = '');
+      idActual = null;
+      abrirModal('paxModal');
+    } else {
+      limpiarForm();
+      document.getElementById('inputFecha').value = hoyISO();
+      abrirModal('formModal');
+    }
   };
 
   // ── Toast ─────────────────────────────────────────────────────────────────

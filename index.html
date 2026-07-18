@@ -1197,7 +1197,7 @@
       abrirModal('paxModal');
     } else {
       limpiarForm();
-      document.getElementById('inputFecha').value = hoyISO();
+      document.getElementById('inputFecha').value = (tabActual === 'calendario' && diaSeleccionado) ? diaSeleccionado : hoyISO();
       abrirModal('formModal');
     }
   };

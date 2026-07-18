@@ -558,6 +558,9 @@
     </div>
     <div id="paxDetailBody"></div>
     <div class="btn-row">
+      <button class="btn btn-ghost" id="paxWhatsappBtn" style="background:rgba(0,230,118,.15);color:var(--ok);display:none;">📱 Abrir WhatsApp</button>
+    </div>
+    <div class="btn-row">
       <button class="btn btn-danger" onclick="eliminarPasajeroPerfil()">Eliminar</button>
       <button class="btn btn-primary" onclick="editarPasajeroPerfil()">Editar</button>
     </div>
@@ -627,6 +630,7 @@
   onSnapshot(collection(db, "pasajeros"), snap => {
     pasajerosDB = {};
     snap.forEach(d => pasajerosDB[d.id] = d.data());
+    renderTab();
   }, err => console.error(err));
 
   function setStatus(online) {
@@ -684,7 +688,7 @@
 
     if (q) {
       lista = lista.filter(([,t]) => {
-        const blob = [t.pasajerosNombres,t.vuelo,t.origen,t.destino,t.notas].join(' ').toLowerCase();
+        const blob = [paxNombresLive(t),t.vuelo,t.origen,t.destino,t.notas].join(' ').toLowerCase();
         return blob.includes(q);
       });
     }
@@ -715,14 +719,16 @@
       lista.map(([id,p],i) => {
         const iniciales = (p.nombre||'?').trim().split(/\s+/).slice(0,2).map(s=>s[0]).join('').toUpperCase();
         const nViajes = Object.values(traslados).filter(t => (t.paxIds||[]).includes(id)).length;
-        return `<div class="pax-card" style="animation-delay:${i*0.03}s" onclick="abrirDetallePasajero('${id}')">
-          <div class="pax-avatar">${iniciales}</div>
-          <div class="pax-card-info">
+        const tel = soloDigitos(p.telefono);
+        return `<div class="pax-card" style="animation-delay:${i*0.03}s">
+          <div class="pax-avatar" onclick="abrirDetallePasajero('${id}')">${iniciales}</div>
+          <div class="pax-card-info" onclick="abrirDetallePasajero('${id}')">
             <div class="pax-card-name">${escapeHtml(p.nombre||'Sin nombre')}</div>
             ${p.telefono ? `<div class="pax-card-meta">📱 ${escapeHtml(p.telefono)}</div>` : ''}
             ${p.pais ? `<div class="pax-card-meta">🌎 ${escapeHtml(p.pais)}</div>` : ''}
             <div class="pax-card-trips">${nViajes} viaje${nViajes===1?'':'s'}</div>
           </div>
+          ${tel ? `<a href="https://wa.me/${tel}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="flex-shrink:0;width:36px;height:36px;border-radius:50%;background:rgba(0,230,118,.15);display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:1.1rem;">📱</a>` : ''}
         </div>`;
       }).join('')
     }</div>`;
@@ -732,6 +738,7 @@
     idActual = id;
     const p = pasajerosDB[id];
     const nViajes = Object.values(traslados).filter(t => (t.paxIds||[]).includes(id)).length;
+    const tel = soloDigitos(p.telefono);
     document.getElementById('paxDetailBody').innerHTML = `
       <div class="detail-row"><span>Nombre</span><span>${escapeHtml(p.nombre||'—')}</span></div>
       <div class="detail-row"><span>Celular</span><span>${escapeHtml(p.telefono||'—')}</span></div>
@@ -739,6 +746,13 @@
       ${p.notas ? `<div class="detail-row"><span>Notas</span><span>${escapeHtml(p.notas)}</span></div>` : ''}
       <div class="detail-row"><span>Viajes registrados</span><span>${nViajes}</span></div>
     `;
+    const waBtn = document.getElementById('paxWhatsappBtn');
+    if (tel) {
+      waBtn.style.display = '';
+      waBtn.onclick = () => window.open(`https://wa.me/${tel}`, '_blank');
+    } else {
+      waBtn.style.display = 'none';
+    }
     abrirModal('paxDetailModal');
   };
 
@@ -805,7 +819,7 @@
     return `<div class="trip-card ${u}" style="animation-delay:${i*0.03}s" onclick="abrirDetalle('${id}')">
       <div class="trip-icon">${tipo.icon}</div>
       <div class="trip-info">
-        <div class="trip-pax">${escapeHtml(t.pasajerosNombres || 'Sin nombre')}</div>
+        <div class="trip-pax">${escapeHtml(paxNombresLive(t) || 'Sin nombre')}</div>
         <div class="trip-ruta">${escapeHtml(t.origen||'')} → ${escapeHtml(t.destino||'')}</div>
         ${t.vuelo ? `<div class="trip-vuelo">✈️ Vuelo ${escapeHtml(t.vuelo)}</div>` : ''}
         <span class="badge ${u}">${badgeText(u)}</span>
@@ -820,6 +834,18 @@
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+
+  // Nombres de pasajeros de un viaje, siempre actualizados según su perfil actual
+  function paxNombresLive(t) {
+    if (t.paxIds && t.paxIds.length) {
+      const nombres = t.paxIds.map(id => pasajerosDB[id]?.nombre).filter(Boolean);
+      if (nombres.length) return nombres.join(', ');
+    }
+    return t.pasajerosNombres || '';
+  }
+
+  // Solo dígitos, para armar enlaces wa.me (WhatsApp)
+  function soloDigitos(tel) { return (tel||'').replace(/[^0-9]/g, ''); }
 
   // ── Stats ─────────────────────────────────────────────────────────────────
   function renderStats() {
@@ -930,8 +956,10 @@
     const paxDetalle = (t.paxIds||[]).map(pid => {
       const p = pasajerosDB[pid];
       if (!p) return null;
-      return `${escapeHtml(p.nombre)}${p.telefono ? ' · '+escapeHtml(p.telefono) : ''}`;
-    }).filter(Boolean).join('<br>') || escapeHtml(t.pasajerosNombres || '—');
+      const tel = soloDigitos(p.telefono);
+      const waLink = tel ? `<a href="https://wa.me/${tel}" target="_blank" rel="noopener" style="color:var(--ok);text-decoration:none;">📱 WhatsApp</a>` : '';
+      return `<div>${escapeHtml(p.nombre)}${p.telefono ? ' · '+escapeHtml(p.telefono) : ''}${waLink ? ' · '+waLink : ''}</div>`;
+    }).filter(Boolean).join('') || escapeHtml(paxNombresLive(t) || '—');
 
     document.getElementById('detailBody').innerHTML = `
       <div class="detail-row"><span>Pasajero(s)</span><span>${paxDetalle}</span></div>

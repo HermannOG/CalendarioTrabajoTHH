@@ -34,6 +34,8 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 
+    html, body { max-width: 100%; overflow-x: hidden; }
+
     body {
       background: var(--bg);
       color: var(--text);
@@ -90,6 +92,11 @@
       position: relative; z-index: 1;
       max-width: 640px; margin: 0 auto;
       padding: 16px 16px 100px;
+      width: 100%;
+    }
+    @media (max-width: 420px) {
+      main { padding: 14px 10px 100px; }
+      .stats { gap: 6px; }
     }
 
     .stats {
@@ -219,21 +226,23 @@
     .cal-header button {
       background: var(--bg2); border: 1px solid var(--border); color: var(--text);
       width: 36px; height: 36px; border-radius: 8px; font-size: 1rem; cursor: pointer;
+      flex-shrink: 0;
     }
     .cal-title { font-size: 1.1rem; font-weight: 700; text-transform: capitalize; }
     .cal-grid {
-      display: grid; grid-template-columns: repeat(7, 1fr);
-      gap: 4px; margin-bottom: 18px;
+      display: grid; grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 3px; margin-bottom: 18px; width: 100%;
     }
     .cal-dow {
-      text-align: center; font-size: .6rem; color: var(--muted);
+      text-align: center; font-size: .55rem; color: var(--muted);
       text-transform: uppercase; padding-bottom: 4px; font-family: var(--font-mono);
+      overflow: hidden;
     }
     .cal-day {
       aspect-ratio: 1; background: var(--bg2); border: 1px solid var(--border);
       border-radius: 8px; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; cursor: pointer; position: relative; font-size: .8rem;
-      transition: all .15s;
+      justify-content: center; cursor: pointer; position: relative; font-size: .75rem;
+      transition: all .15s; min-width: 0; padding: 2px;
     }
     .cal-day.empty { background: none; border: none; cursor: default; }
     .cal-day.today { border-color: var(--accent); }
@@ -306,6 +315,42 @@
     .btn-primary { background: var(--accent); color: var(--bg); }
     .btn-danger  { background: rgba(255,23,68,.15); color: var(--danger); }
     .btn-ghost   { background: var(--bg3); color: var(--text); }
+    .btn-warn    { background: rgba(255,179,0,.15); color: var(--warn); }
+
+    /* ── Passenger picker ── */
+    .pax-chips {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+    }
+    .pax-chip {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg3); border: 1px solid var(--accent);
+      border-radius: 20px; padding: 5px 6px 5px 12px;
+      font-size: .82rem; font-weight: 600;
+    }
+    .pax-chip button {
+      background: none; border: none; color: var(--muted); font-size: .95rem;
+      cursor: pointer; width: 18px; height: 18px; line-height: 1;
+    }
+    .pax-search { position: relative; }
+    .pax-suggestions {
+      position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+      max-height: 180px; overflow-y: auto; z-index: 10;
+      display: none;
+    }
+    .pax-suggestions.show { display: block; }
+    .pax-sugg-item {
+      padding: 10px 12px; font-size: .85rem; cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .pax-sugg-item:last-child { border-bottom: none; }
+    .pax-sugg-item:active { background: var(--bg2); }
+    .pax-sugg-item .tel { color: var(--muted); font-size: .72rem; font-family: var(--font-mono); }
+    .pax-sugg-new {
+      padding: 10px 12px; font-size: .85rem; color: var(--accent); font-weight: 600; cursor: pointer;
+    }
+    .pax-sugg-new:active { background: var(--bg2); }
 
     .detail-row {
       display: flex; justify-content: space-between; align-items: center;
@@ -376,7 +421,11 @@
 
     <div class="field">
       <label>Pasajero(s)</label>
-      <input type="text" id="inputPax" placeholder="Ej: Juan Pérez, María Gómez" />
+      <div class="pax-chips" id="paxChips"></div>
+      <div class="pax-search">
+        <input type="text" id="inputPaxSearch" placeholder="Buscar o agregar pasajero…" autocomplete="off" oninput="buscarPasajeros(this.value)" onfocus="buscarPasajeros(this.value)" />
+        <div class="pax-suggestions" id="paxSuggestions"></div>
+      </div>
     </div>
 
     <div class="field-row">
@@ -418,26 +467,6 @@
       </div>
     </div>
 
-    <div class="field-row">
-      <div class="field">
-        <label>Conductor (opcional)</label>
-        <input type="text" id="inputConductor" placeholder="Ej: Carlos R." />
-      </div>
-      <div class="field">
-        <label>Vehículo (opcional)</label>
-        <input type="text" id="inputVehiculo" placeholder="Ej: Van placa CRC123" />
-      </div>
-    </div>
-
-    <div class="field">
-      <label>Estado</label>
-      <select id="inputEstado">
-        <option value="pendiente">Pendiente</option>
-        <option value="completado">Completado</option>
-        <option value="cancelado">Cancelado</option>
-      </select>
-    </div>
-
     <div class="field">
       <label>Notas (opcional)</label>
       <textarea id="inputNotas" placeholder="Ej: hotel de conexión, número de personas, contacto, equipaje especial…"></textarea>
@@ -458,6 +487,7 @@
       <button onclick="cerrarModal('detailModal')">✕</button>
     </div>
     <div id="detailBody"></div>
+    <div class="btn-row" id="detailStatusRow"></div>
     <div class="btn-row">
       <button class="btn btn-danger" onclick="eliminarTraslado()">Eliminar</button>
       <button class="btn btn-primary" onclick="editarTraslado()">Editar</button>
@@ -473,7 +503,7 @@
   import { getAuth, signInAnonymously,
            onAuthStateChanged }                      from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
   import { getFirestore, collection, getDocs,
-           doc, setDoc, deleteDoc, addDoc,
+           doc, setDoc, deleteDoc, addDoc, updateDoc,
            onSnapshot }                              from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
   // ── 🔧 CONFIGURACIÓN — reemplaza con los datos de TU proyecto de Firebase ──
@@ -506,13 +536,15 @@
   const MESES_L = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
   let traslados   = {};   // id -> data
+  let pasajerosDB  = {};  // id -> {nombre, telefono, pais}
+  let selectedPax  = [];  // ids de pasajeros elegidos en el formulario actual
   let tabActual    = 'proximos';
   let idActual     = null;
   let modoEdicion  = false;
   let calMes, calAnio, diaSeleccionado = null;
   { const h = new Date(); calMes = h.getMonth(); calAnio = h.getFullYear(); }
 
-  // ── Realtime listener ────────────────────────────────────────────────────
+  // ── Realtime listeners ───────────────────────────────────────────────────
   onSnapshot(collection(db, "traslados"), snap => {
     traslados = {};
     snap.forEach(d => traslados[d.id] = d.data());
@@ -522,6 +554,11 @@
     setStatus(false);
     console.error(err);
   });
+
+  onSnapshot(collection(db, "pasajeros"), snap => {
+    pasajerosDB = {};
+    snap.forEach(d => pasajerosDB[d.id] = d.data());
+  }, err => console.error(err));
 
   function setStatus(online) {
     const dot  = document.getElementById('statusDot');
@@ -575,7 +612,7 @@
 
     if (q) {
       lista = lista.filter(([,t]) => {
-        const blob = [t.pasajeros,t.vuelo,t.origen,t.destino,t.conductor,t.vehiculo,t.notas].join(' ').toLowerCase();
+        const blob = [t.pasajerosNombres,t.vuelo,t.origen,t.destino,t.notas].join(' ').toLowerCase();
         return blob.includes(q);
       });
     }
@@ -602,7 +639,7 @@
     return `<div class="trip-card ${u}" style="animation-delay:${i*0.03}s" onclick="abrirDetalle('${id}')">
       <div class="trip-icon">${tipo.icon}</div>
       <div class="trip-info">
-        <div class="trip-pax">${escapeHtml(t.pasajeros || 'Sin nombre')}</div>
+        <div class="trip-pax">${escapeHtml(t.pasajerosNombres || 'Sin nombre')}</div>
         <div class="trip-ruta">${escapeHtml(t.origen||'')} → ${escapeHtml(t.destino||'')}</div>
         ${t.vuelo ? `<div class="trip-vuelo">✈️ Vuelo ${escapeHtml(t.vuelo)}</div>` : ''}
         <span class="badge ${u}">${badgeText(u)}</span>
@@ -724,42 +761,129 @@
     const t = traslados[id];
     const u = urgency(t);
     const tipo = TIPOS[t.tipo] || TIPOS.otro;
+    const paxDetalle = (t.paxIds||[]).map(pid => {
+      const p = pasajerosDB[pid];
+      if (!p) return null;
+      return `${escapeHtml(p.nombre)}${p.telefono ? ' · '+escapeHtml(p.telefono) : ''}`;
+    }).filter(Boolean).join('<br>') || escapeHtml(t.pasajerosNombres || '—');
+
     document.getElementById('detailBody').innerHTML = `
-      <div class="detail-row"><span>Pasajero(s)</span><span>${escapeHtml(t.pasajeros||'—')}</span></div>
+      <div class="detail-row"><span>Pasajero(s)</span><span>${paxDetalle}</span></div>
       <div class="detail-row"><span>Tipo</span><span>${tipo.icon} ${tipo.label}</span></div>
       <div class="detail-row"><span>Fecha</span><span>${t.fecha} · ${t.hora||'--:--'}</span></div>
       ${t.vuelo ? `<div class="detail-row"><span>Vuelo</span><span>${escapeHtml(t.vuelo)}</span></div>` : ''}
       <div class="detail-row"><span>Origen</span><span>${escapeHtml(t.origen||'—')}</span></div>
       <div class="detail-row"><span>Destino</span><span>${escapeHtml(t.destino||'—')}</span></div>
-      ${t.conductor ? `<div class="detail-row"><span>Conductor</span><span>${escapeHtml(t.conductor)}</span></div>` : ''}
-      ${t.vehiculo ? `<div class="detail-row"><span>Vehículo</span><span>${escapeHtml(t.vehiculo)}</span></div>` : ''}
       <div class="detail-row"><span>Estado</span><span><span class="badge ${u}">${badgeText(u)}</span></span></div>
       ${t.notas ? `<div class="detail-row"><span>Notas</span><span>${escapeHtml(t.notas)}</span></div>` : ''}
     `;
+
+    const statusRow = document.getElementById('detailStatusRow');
+    if (t.estado === 'pendiente') {
+      statusRow.innerHTML = `
+        <button class="btn btn-ghost" onclick="cambiarEstado('cancelado')">Cancelar viaje</button>
+        <button class="btn btn-warn" onclick="cambiarEstado('completado')">Marcar completado</button>`;
+    } else {
+      statusRow.innerHTML = `<button class="btn btn-ghost" onclick="cambiarEstado('pendiente')">Volver a pendiente</button>`;
+    }
+
     abrirModal('detailModal');
   };
 
+  window.cambiarEstado = async function(nuevoEstado) {
+    try {
+      await updateDoc(doc(db,'traslados',idActual), { estado: nuevoEstado });
+      toast(nuevoEstado === 'completado' ? '✅ Marcado como completado' : nuevoEstado === 'cancelado' ? '🚫 Viaje cancelado' : '↩️ Vuelto a pendiente', 'success');
+      cerrarModal('detailModal');
+    } catch(e) {
+      console.error(e);
+      toast('❌ Error al actualizar', 'error');
+    }
+  };
+
+  // ── Pasajeros: buscar / seleccionar / crear ──────────────────────────────
+  window.buscarPasajeros = function(q) {
+    const box = document.getElementById('paxSuggestions');
+    q = (q||'').trim().toLowerCase();
+    const candidatos = Object.entries(pasajerosDB)
+      .filter(([id]) => !selectedPax.includes(id))
+      .filter(([,p]) => !q || p.nombre.toLowerCase().includes(q) || (p.telefono||'').includes(q));
+
+    let html = candidatos.slice(0,6).map(([id,p]) =>
+      `<div class="pax-sugg-item" onclick="seleccionarPasajero('${id}')">
+        <span>${escapeHtml(p.nombre)}</span>
+        <span class="tel">${escapeHtml(p.telefono||'')}</span>
+      </div>`
+    ).join('');
+
+    if (q && !Object.values(pasajerosDB).some(p => p.nombre.toLowerCase() === q)) {
+      html += `<div class="pax-sugg-new" onclick="crearPasajeroDesdeInput()">+ Crear pasajero "${escapeHtml(q)}"</div>`;
+    }
+
+    box.innerHTML = html;
+    box.classList.toggle('show', html.length > 0);
+  };
+
+  window.crearPasajeroDesdeInput = async function() {
+    const input = document.getElementById('inputPaxSearch');
+    const nombre = input.value.trim();
+    if (!nombre) return;
+    try {
+      const ref = await addDoc(collection(db,'pasajeros'), { nombre, telefono: '', pais: '' });
+      pasajerosDB[ref.id] = { nombre, telefono: '', pais: '' };
+      seleccionarPasajero(ref.id);
+    } catch(e) {
+      console.error(e);
+      toast('❌ Error al crear pasajero', 'error');
+    }
+  };
+
+  window.seleccionarPasajero = function(id) {
+    if (!selectedPax.includes(id)) selectedPax.push(id);
+    document.getElementById('inputPaxSearch').value = '';
+    document.getElementById('paxSuggestions').classList.remove('show');
+    renderPaxChips();
+  };
+
+  window.quitarPax = function(id) {
+    selectedPax = selectedPax.filter(x => x !== id);
+    renderPaxChips();
+  };
+
+  function renderPaxChips() {
+    document.getElementById('paxChips').innerHTML = selectedPax.map(id => {
+      const p = pasajerosDB[id];
+      if (!p) return '';
+      return `<div class="pax-chip">${escapeHtml(p.nombre)}<button onclick="quitarPax('${id}')">✕</button></div>`;
+    }).join('');
+  }
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.pax-search')) document.getElementById('paxSuggestions').classList.remove('show');
+  });
+
   // ── Guardar (crear o editar) ─────────────────────────────────────────────
   window.guardarTraslado = async function() {
+    if (selectedPax.length === 0) { toast('Agrega al menos un pasajero', 'error'); return; }
+    const pasajerosNombres = selectedPax.map(id => pasajerosDB[id]?.nombre).filter(Boolean).join(', ');
     const data = {
-      pasajeros:  document.getElementById('inputPax').value.trim(),
+      paxIds:     selectedPax,
+      pasajerosNombres,
       tipo:       document.getElementById('inputTipo').value,
       vuelo:      document.getElementById('inputVuelo').value.trim(),
       fecha:      document.getElementById('inputFecha').value,
       hora:       document.getElementById('inputHora').value,
       origen:     document.getElementById('inputOrigen').value.trim(),
       destino:    document.getElementById('inputDestino').value.trim(),
-      conductor:  document.getElementById('inputConductor').value.trim(),
-      vehiculo:   document.getElementById('inputVehiculo').value.trim(),
-      estado:     document.getElementById('inputEstado').value,
       notas:      document.getElementById('inputNotas').value.trim(),
     };
-    if (!data.pasajeros || !data.fecha || !data.hora || !data.origen || !data.destino) {
-      toast('Completa pasajero, fecha, hora, origen y destino', 'error'); return;
+    if (!modoEdicion) data.estado = 'pendiente';
+    if (!data.fecha || !data.hora || !data.origen || !data.destino) {
+      toast('Completa fecha, hora, origen y destino', 'error'); return;
     }
     try {
       if (modoEdicion && idActual) {
-        await setDoc(doc(db,'traslados',idActual), data);
+        await updateDoc(doc(db,'traslados',idActual), data);
         toast('✅ Traslado actualizado', 'success');
       } else {
         await addDoc(collection(db,'traslados'), data);
@@ -778,16 +902,14 @@
     cerrarModal('detailModal');
     setTimeout(() => {
       document.getElementById('formTitle').textContent = 'Editar Traslado';
-      document.getElementById('inputPax').value       = t.pasajeros || '';
+      selectedPax = [...(t.paxIds || [])];
+      renderPaxChips();
       document.getElementById('inputTipo').value      = t.tipo || 'aeropuerto-hotel';
       document.getElementById('inputVuelo').value     = t.vuelo || '';
       document.getElementById('inputFecha').value     = t.fecha || '';
       document.getElementById('inputHora').value      = t.hora || '';
       document.getElementById('inputOrigen').value    = t.origen || '';
       document.getElementById('inputDestino').value   = t.destino || '';
-      document.getElementById('inputConductor').value = t.conductor || '';
-      document.getElementById('inputVehiculo').value  = t.vehiculo || '';
-      document.getElementById('inputEstado').value    = t.estado || 'pendiente';
       document.getElementById('inputNotas').value     = t.notas || '';
       abrirModal('formModal');
     }, 250);
@@ -801,11 +923,12 @@
   };
 
   function limpiarForm() {
-    ['inputPax','inputVuelo','inputFecha','inputHora','inputOrigen','inputDestino','inputConductor','inputVehiculo','inputNotas']
+    ['inputVuelo','inputFecha','inputHora','inputOrigen','inputDestino','inputNotas','inputPaxSearch']
       .forEach(id => document.getElementById(id).value = '');
     document.getElementById('inputTipo').value = 'aeropuerto-hotel';
-    document.getElementById('inputEstado').value = 'pendiente';
     document.getElementById('formTitle').textContent = 'Nuevo Traslado';
+    selectedPax = [];
+    renderPaxChips();
     modoEdicion = false;
     idActual = null;
   }

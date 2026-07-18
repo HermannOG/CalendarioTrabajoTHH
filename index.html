@@ -455,6 +455,8 @@
           <option value="aeropuerto-empresa">Aeropuerto → Empresa</option>
           <option value="hotel-aeropuerto">Hotel → Aeropuerto</option>
           <option value="empresa-aeropuerto">Empresa → Aeropuerto</option>
+          <option value="hotel-empresa">Hotel → Empresa</option>
+          <option value="empresa-hotel">Empresa → Hotel</option>
           <option value="otro">Otro</option>
         </select>
       </div>
@@ -471,7 +473,14 @@
       </div>
       <div class="field">
         <label>Hora</label>
-        <input type="time" id="inputHora" />
+        <div style="display:flex; gap:6px;">
+          <select id="inputHoraH" style="flex:1;"></select>
+          <select id="inputHoraM" style="flex:1;"></select>
+          <select id="inputHoraAP" style="flex:1;">
+            <option value="AM">AM</option>
+            <option value="PM">PM</option>
+          </select>
+        </div>
       </div>
     </div>
 
@@ -602,6 +611,8 @@
     'aeropuerto-empresa': { label: 'Aeropuerto → Empresa', icon: '🏢' },
     'hotel-aeropuerto':   { label: 'Hotel → Aeropuerto',   icon: '✈️' },
     'empresa-aeropuerto': { label: 'Empresa → Aeropuerto', icon: '✈️' },
+    'hotel-empresa':      { label: 'Hotel → Empresa',      icon: '🏢' },
+    'empresa-hotel':      { label: 'Empresa → Hotel',      icon: '🏨' },
     'otro':               { label: 'Otro',                 icon: '🚐' }
   };
   const DOW = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -664,6 +675,48 @@
   function fmtFechaCorta(fechaISO) {
     const [y,m,d] = fechaISO.split('-').map(Number);
     return { dia: String(d).padStart(2,'0'), mes: MESES_L[m-1].slice(0,3).toUpperCase() };
+  }
+
+  // ── Hora 12h AM/PM ↔ 24h "HH:MM" ────────────────────────────────────────
+  function fmtHora12(hora24) {
+    if (!hora24) return '';
+    let [h,m] = hora24.split(':').map(Number);
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) h = 12;
+    return `${h}:${String(m).padStart(2,'0')} ${ap}`;
+  }
+  function poblarSelectsHora() {
+    const selH = document.getElementById('inputHoraH');
+    const selM = document.getElementById('inputHoraM');
+    if (selH.options.length === 0) {
+      for (let h=1; h<=12; h++) selH.innerHTML += `<option value="${h}">${h}</option>`;
+      for (let m=0; m<60; m+=5) selM.innerHTML += `<option value="${m}">${String(m).padStart(2,'0')}</option>`;
+    }
+  }
+  function setHoraSelects(hora24) {
+    poblarSelectsHora();
+    let h = 12, m = 0, ap = 'AM';
+    if (hora24) {
+      const [hh,mm] = hora24.split(':').map(Number);
+      ap = hh >= 12 ? 'PM' : 'AM';
+      h = hh % 12; if (h === 0) h = 12;
+      m = mm;
+    }
+    document.getElementById('inputHoraH').value = h;
+    // Si el minuto exacto no está en la lista (múltiplos de 5), se agrega temporalmente
+    const selM = document.getElementById('inputHoraM');
+    if (![...selM.options].some(o => Number(o.value) === m)) {
+      selM.innerHTML += `<option value="${m}">${String(m).padStart(2,'0')}</option>`;
+    }
+    selM.value = m;
+    document.getElementById('inputHoraAP').value = ap;
+  }
+  function getHora24DesdeSelects() {
+    let h = Number(document.getElementById('inputHoraH').value);
+    const m = Number(document.getElementById('inputHoraM').value);
+    const ap = document.getElementById('inputHoraAP').value;
+    if (ap === 'AM') { if (h === 12) h = 0; } else { if (h !== 12) h += 12; }
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
   }
 
   // ── Render principal ─────────────────────────────────────────────────────
@@ -826,7 +879,7 @@
       </div>
       <div class="trip-fecha">
         <div class="dia">${dia} ${mes}</div>
-        <div class="hora">${t.hora || ''}</div>
+        <div class="hora">${fmtHora12(t.hora)}</div>
       </div>
     </div>`;
   }
@@ -964,7 +1017,7 @@
     document.getElementById('detailBody').innerHTML = `
       <div class="detail-row"><span>Pasajero(s)</span><span>${paxDetalle}</span></div>
       <div class="detail-row"><span>Tipo</span><span>${tipo.icon} ${tipo.label}</span></div>
-      <div class="detail-row"><span>Fecha</span><span>${t.fecha} · ${t.hora||'--:--'}</span></div>
+      <div class="detail-row"><span>Fecha</span><span>${t.fecha} · ${fmtHora12(t.hora)||'--:--'}</span></div>
       ${t.vuelo ? `<div class="detail-row"><span>Vuelo</span><span>${escapeHtml(t.vuelo)}</span></div>` : ''}
       <div class="detail-row"><span>Origen</span><span>${escapeHtml(t.origen||'—')}</span></div>
       <div class="detail-row"><span>Destino</span><span>${escapeHtml(t.destino||'—')}</span></div>
@@ -1066,7 +1119,7 @@
       tipo:       document.getElementById('inputTipo').value,
       vuelo:      document.getElementById('inputVuelo').value.trim(),
       fecha:      document.getElementById('inputFecha').value,
-      hora:       document.getElementById('inputHora').value,
+      hora:       getHora24DesdeSelects(),
       origen:     document.getElementById('inputOrigen').value.trim(),
       destino:    document.getElementById('inputDestino').value.trim(),
       notas:      document.getElementById('inputNotas').value.trim(),
@@ -1101,7 +1154,7 @@
       document.getElementById('inputTipo').value      = t.tipo || 'aeropuerto-hotel';
       document.getElementById('inputVuelo').value     = t.vuelo || '';
       document.getElementById('inputFecha').value     = t.fecha || '';
-      document.getElementById('inputHora').value      = t.hora || '';
+      setHoraSelects(t.hora || '');
       document.getElementById('inputOrigen').value    = t.origen || '';
       document.getElementById('inputDestino').value   = t.destino || '';
       document.getElementById('inputNotas').value     = t.notas || '';
@@ -1117,9 +1170,10 @@
   };
 
   function limpiarForm() {
-    ['inputVuelo','inputFecha','inputHora','inputOrigen','inputDestino','inputNotas','inputPaxSearch']
+    ['inputVuelo','inputFecha','inputOrigen','inputDestino','inputNotas','inputPaxSearch']
       .forEach(id => document.getElementById(id).value = '');
     document.getElementById('inputTipo').value = 'aeropuerto-hotel';
+    setHoraSelects('');
     document.getElementById('formTitle').textContent = 'Nuevo Traslado';
     selectedPax = [];
     renderPaxChips();

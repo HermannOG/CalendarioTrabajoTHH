@@ -129,14 +129,17 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       padding: 4px; margin-bottom: 16px;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .tabs::-webkit-scrollbar { display: none; }
     .tab {
-      flex: 1; padding: 8px 2px;
+      flex: 0 0 auto; padding: 8px 12px;
       background: none; border: none; color: var(--muted);
-      font-family: var(--font-head); font-size: .7rem; font-weight: 600;
+      font-family: var(--font-head); font-size: .72rem; font-weight: 600;
       text-transform: uppercase; letter-spacing: .3px;
       border-radius: 8px; cursor: pointer;
-      transition: all .2s;
+      transition: all .2s; white-space: nowrap;
     }
     .tab.active { background: var(--accent); color: var(--bg); }
 
@@ -386,6 +389,28 @@
     .pax-card-meta { font-family: var(--font-mono); font-size: .7rem; color: var(--muted); margin-top: 2px; }
     .pax-card-trips { font-size: .65rem; color: var(--accent); text-transform: uppercase; letter-spacing: .5px; margin-top: 3px; }
 
+    /* ── Historial ── */
+    .hist-controls {
+      background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; margin-bottom: 16px;
+    }
+    .hist-mode-toggle {
+      display: flex; gap: 6px; margin-bottom: 12px;
+    }
+    .hist-mode-toggle button {
+      flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--muted); font-family: var(--font-head);
+      font-size: .78rem; font-weight: 600; cursor: pointer; text-transform: uppercase; letter-spacing: .3px;
+    }
+    .hist-mode-toggle button.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+    .hist-controls input[type="week"], .hist-controls input[type="month"] {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-family: var(--font-head); font-size: .9rem; padding: 10px 12px;
+      outline: none; margin-bottom: 10px;
+    }
+    .hist-summary { font-size: .8rem; color: var(--muted); margin-bottom: 10px; }
+    .hist-summary b { color: var(--accent); }
+
     .toast {
       position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
       background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
@@ -417,6 +442,7 @@
     <button class="tab active" onclick="switchTab('proximos', this)">Próximos</button>
     <button class="tab" onclick="switchTab('calendario', this)">Calendario</button>
     <button class="tab" onclick="switchTab('todos', this)">Todos</button>
+    <button class="tab" onclick="switchTab('historial', this)">Historial</button>
     <button class="tab" onclick="switchTab('pasajeros', this)">Pasajeros</button>
     <button class="tab" onclick="switchTab('config', this)">⚙️</button>
   </div>
@@ -722,13 +748,14 @@
   // ── Render principal ─────────────────────────────────────────────────────
   function renderTab() {
     document.getElementById('fabBtn').style.display = tab_visible(tabActual);
-    document.getElementById('searchWrap').style.display = (tabActual==='config') ? 'none' : '';
+    document.getElementById('searchWrap').style.display = (tabActual==='config' || tabActual==='historial') ? 'none' : '';
     document.getElementById('searchInput').placeholder = (tabActual==='pasajeros')
       ? 'Buscar por nombre o teléfono…' : 'Buscar por pasajero, vuelo, destino…';
 
     if (tabActual === 'config') { renderConfig(); renderStats(); return; }
     if (tabActual === 'calendario') { renderCalendario(); renderStats(); return; }
     if (tabActual === 'pasajeros') { renderPasajerosTab(); renderStats(); return; }
+    if (tabActual === 'historial') { renderHistorial(); renderStats(); return; }
 
     const q = (document.getElementById('searchInput').value || '').toLowerCase();
     let lista = Object.entries(traslados);
@@ -752,7 +779,7 @@
     renderStats();
   }
 
-  function tab_visible(tab) { return (tab === 'config') ? 'none' : ''; }
+  function tab_visible(tab) { return (tab === 'config' || tab === 'historial') ? 'none' : ''; }
 
   // ── Pestaña de Pasajeros ─────────────────────────────────────────────────
   function renderPasajerosTab() {
@@ -975,6 +1002,144 @@
   };
 
   // ── Config ────────────────────────────────────────────────────────────────
+  // ── Historial ─────────────────────────────────────────────────────────────
+  let histModo = 'semana'; // 'semana' | 'mes'
+
+  function hoyValorSemana() {
+    const h = new Date();
+    const primerEnero = new Date(h.getFullYear(),0,1);
+    const dias = Math.floor((h - primerEnero) / 86400000);
+    const semana = Math.ceil((dias + primerEnero.getDay() + 1) / 7);
+    return `${h.getFullYear()}-W${String(semana).padStart(2,'0')}`;
+  }
+  function hoyValorMes() {
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth()+1).padStart(2,'0')}`;
+  }
+  function rangoDesdeSemanaISO(valor) {
+    // valor: "2026-W07"
+    const [anio, semStr] = valor.split('-W');
+    const sem = Number(semStr);
+    const enero4 = new Date(Number(anio), 0, 4); // 4 de enero siempre está en la semana 1 (ISO)
+    const diaSemanaEnero4 = (enero4.getDay() + 6) % 7; // lunes=0
+    const lunesSemana1 = new Date(enero4); lunesSemana1.setDate(enero4.getDate() - diaSemanaEnero4);
+    const inicio = new Date(lunesSemana1); inicio.setDate(lunesSemana1.getDate() + (sem-1)*7);
+    const fin = new Date(inicio); fin.setDate(inicio.getDate() + 6);
+    return { inicio, fin };
+  }
+  function isoDeDate(d) {
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  window.cambiarHistModo = function(modo, btn) {
+    histModo = modo;
+    document.querySelectorAll('.hist-mode-toggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderHistorial();
+  };
+
+  function obtenerViajesHistorial() {
+    const inputSemana = document.getElementById('histSemana');
+    const inputMes = document.getElementById('histMes');
+    let inicioISO, finISO, etiqueta;
+
+    if (histModo === 'semana') {
+      const valor = (inputSemana && inputSemana.value) || hoyValorSemana();
+      const { inicio, fin } = rangoDesdeSemanaISO(valor);
+      inicioISO = isoDeDate(inicio); finISO = isoDeDate(fin);
+      etiqueta = `Semana del ${inicio.getDate()} al ${fin.getDate()} de ${MESES_L[fin.getMonth()]} ${fin.getFullYear()}`;
+    } else {
+      const valor = (inputMes && inputMes.value) || hoyValorMes();
+      const [anio, mes] = valor.split('-').map(Number);
+      inicioISO = `${anio}-${String(mes).padStart(2,'0')}-01`;
+      const ultimoDia = new Date(anio, mes, 0).getDate();
+      finISO = `${anio}-${String(mes).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`;
+      etiqueta = `${MESES_L[mes-1]} ${anio}`;
+    }
+
+    const viajes = Object.entries(traslados)
+      .filter(([,t]) => t.estado === 'completado' && t.fecha >= inicioISO && t.fecha <= finISO)
+      .sort(([,a],[,b]) => (a.fecha+a.hora).localeCompare(b.fecha+b.hora));
+
+    return { viajes, etiqueta, inicioISO, finISO };
+  }
+
+  function renderHistorial() {
+    poblarSelectsHora(); // por si acaso, no relacionado pero barato
+    const valorSemana = hoyValorSemana();
+    const valorMes = hoyValorMes();
+
+    document.getElementById('mainContent').innerHTML = `
+      <div class="hist-controls">
+        <div class="hist-mode-toggle">
+          <button class="${histModo==='semana'?'active':''}" onclick="cambiarHistModo('semana', this)">Por semana</button>
+          <button class="${histModo==='mes'?'active':''}" onclick="cambiarHistModo('mes', this)">Por mes</button>
+        </div>
+        ${histModo === 'semana'
+          ? `<input type="week" id="histSemana" value="${valorSemana}" onchange="renderHistorial()" />`
+          : `<input type="month" id="histMes" value="${valorMes}" onchange="renderHistorial()" />`
+        }
+        <div id="histSummary" class="hist-summary"></div>
+        <div class="btn-row" style="margin-top:0;">
+          <button class="btn btn-primary" onclick="descargarHistorialWord()">📄 Descargar Word</button>
+        </div>
+      </div>
+      <div id="histLista"></div>
+    `;
+
+    const { viajes, etiqueta } = obtenerViajesHistorial();
+    document.getElementById('histSummary').innerHTML = `<b>${viajes.length}</b> viaje${viajes.length===1?'':'s'} completado${viajes.length===1?'':'s'} — ${etiqueta}`;
+    document.getElementById('histLista').innerHTML = renderLista(viajes);
+  }
+
+  window.descargarHistorialWord = function() {
+    const { viajes, etiqueta } = obtenerViajesHistorial();
+    if (viajes.length === 0) { toast('No hay viajes completados en ese período', 'error'); return; }
+
+    const filas = viajes.map(([,t]) => {
+      const tipo = TIPOS[t.tipo] || TIPOS.otro;
+      return `<tr>
+        <td>${t.fecha}</td>
+        <td>${fmtHora12(t.hora)}</td>
+        <td>${escapeHtml(paxNombresLive(t))}</td>
+        <td>${escapeHtml(tipo.label)}</td>
+        <td>${escapeHtml(t.vuelo||'')}</td>
+        <td>${escapeHtml(t.origen||'')}</td>
+        <td>${escapeHtml(t.destino||'')}</td>
+        <td>${escapeHtml(t.notas||'')}</td>
+      </tr>`;
+    }).join('');
+
+    const html = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8"><title>Historial de Traslados</title></head>
+      <body style="font-family: Calibri, Arial, sans-serif;">
+        <h2 style="color:#0f1923;">Historial de Traslados</h2>
+        <p style="color:#555;">${escapeHtml(etiqueta)} · ${viajes.length} viaje${viajes.length===1?'':'s'} completado${viajes.length===1?'':'s'}</p>
+        <table border="1" cellspacing="0" cellpadding="6" style="border-collapse:collapse; width:100%; font-size:11pt;">
+          <thead>
+            <tr style="background:#0f1923; color:#ffffff;">
+              <th>Fecha</th><th>Hora</th><th>Pasajero(s)</th><th>Tipo</th><th>Vuelo</th><th>Origen</th><th>Destino</th><th>Notas</th>
+            </tr>
+          </thead>
+          <tbody>${filas}</tbody>
+        </table>
+      </body>
+      </html>`;
+
+    const blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Historial_${etiqueta.replace(/\s+/g,'_')}.doc`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('📄 Documento descargado', 'success');
+  };
+
+
   function renderConfig() {
     const total = Object.keys(traslados).length;
     document.getElementById('mainContent').innerHTML = `

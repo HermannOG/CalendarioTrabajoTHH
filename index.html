@@ -753,9 +753,9 @@
 
   // ── Consulta de vuelo (AeroDataBox / RapidAPI) ──────────────────────────
   async function consultarLlegadaVuelo(numeroVuelo, fechaISO) {
-    if (!AERODATABOX_KEY || AERODATABOX_KEY === "e81e82e96emsh0e808b6fc499f65p1ad3f6jsn5fa307034b09") {
-      return { error: 'config' };
-    }
+    if (!AERODATABOX_KEY) {
+    return { error: 'config' };
+}
     const num = (numeroVuelo || '').replace(/\s+/g, '').toUpperCase();
     if (!num) return { error: 'sin_numero' };
 

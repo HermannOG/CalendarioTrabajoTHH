@@ -631,6 +631,13 @@
     if (!user) { signInAnonymously(auth).catch(e => { console.error(e); setStatus(false); }); }
   });
 
+  // 🔧 Configuración de AeroDataBox (RapidAPI) — para consultar hora de llegada de vuelos.
+  // 1. Crea cuenta gratis en https://rapidapi.com/aedbx-aedbx/api/aerodatabox
+  // 2. Suscríbete al plan gratuito ("Basic")
+  // 3. Copia tu "X-RapidAPI-Key" y pégala abajo
+  const AERODATABOX_KEY = "TU_API_KEY_AQUI";
+  const AEROPUERTOS_CR = ['SJO','LIR']; // Juan Santamaría y Daniel Oduber (Liberia)
+
   const TIPOS = {
     'aeropuerto-hotel':   { label: 'Aeropuerto → Hotel',   icon: '🏨' },
     'aeropuerto-empresa': { label: 'Aeropuerto → Empresa', icon: '🏢' },
@@ -742,6 +749,60 @@
     const ap = document.getElementById('inputHoraAP').value;
     if (ap === 'AM') { if (h === 12) h = 0; } else { if (h !== 12) h += 12; }
     return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  }
+
+  // ── Consulta de vuelo (AeroDataBox / RapidAPI) ──────────────────────────
+  async function consultarLlegadaVuelo(numeroVuelo, fechaISO) {
+    if (!AERODATABOX_KEY || AERODATABOX_KEY === 'e81e82e96emsh0e808b6fc499f65p1ad3f6jsn5fa307034b09') {
+      return { error: 'config' };
+    }
+    const num = (numeroVuelo || '').replace(/\s+/g, '').toUpperCase();
+    if (!num) return { error: 'sin_numero' };
+
+    try {
+      const url = `https://aerodatabox.p.rapidapi.com/flights/number/${encodeURIComponent(num)}/${fechaISO}`;
+      const resp = await fetch(url, {
+        headers: {
+          'X-RapidAPI-Key': AERODATABOX_KEY,
+          'X-RapidAPI-Host': 'aerodatabox.p.rapidapi.com'
+        }
+      });
+      if (!resp.ok) return { error: 'http_' + resp.status };
+      const data = await resp.json();
+      if (!Array.isArray(data) || data.length === 0) return { error: 'no_encontrado' };
+
+      // Prioriza el vuelo cuya llegada sea a un aeropuerto de Costa Rica
+      let vuelo = data.find(v => v.arrival && v.arrival.airport && AEROPUERTOS_CR.includes(v.arrival.airport.iata));
+      if (!vuelo) vuelo = data[0];
+
+      const arr = vuelo.arrival;
+      if (!arr) return { error: 'sin_llegada' };
+
+      return {
+        ok: true,
+        aeropuerto: arr.airport ? (arr.airport.name || arr.airport.iata) : '—',
+        esCostaRica: arr.airport ? AEROPUERTOS_CR.includes(arr.airport.iata) : false,
+        programada: arr.scheduledTime ? arr.scheduledTime.local : null,
+        estimada:   arr.predictedTime ? arr.predictedTime.local : (arr.estimatedTime ? arr.estimatedTime.local : null),
+        real:       arr.actualTime ? arr.actualTime.local : (arr.runwayTime ? arr.runwayTime.local : null),
+        terminal:   arr.terminal || null,
+        estado:     vuelo.status || null
+      };
+    } catch (e) {
+      console.error(e);
+      return { error: 'red' };
+    }
+  }
+
+  function fmtHoraLocalAPI(str) {
+    // AeroDataBox devuelve algo como "2026-07-20 14:35+00:00" o similar con offset local
+    if (!str) return null;
+    const m = str.match(/(\d{2}):(\d{2})/);
+    if (!m) return str;
+    let h = Number(m[1]); const min = m[2];
+    const ap = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; if (h === 0) h = 12;
+    return `${h}:${min} ${ap}`;
   }
 
   // ── Render principal ─────────────────────────────────────────────────────
@@ -1187,7 +1248,13 @@
       <div class="detail-row"><span>Destino</span><span>${escapeHtml(t.destino||'—')}</span></div>
       <div class="detail-row"><span>Estado</span><span><span class="badge ${u}">${badgeText(u)}</span></span></div>
       ${t.notas ? `<div class="detail-row"><span>Notas</span><span>${escapeHtml(t.notas)}</span></div>` : ''}
+      ${t.vuelo ? `<div id="vueloInfoBox" style="margin-top:10px;"></div>` : ''}
     `;
+
+    if (t.vuelo) {
+      const box = document.getElementById('vueloInfoBox');
+      box.innerHTML = `<button class="btn btn-ghost" style="width:100%;" onclick="consultarYMostrarVuelo('${escapeHtml(t.vuelo)}','${t.fecha}')">🛬 Consultar hora de llegada</button>`;
+    }
 
     const statusRow = document.getElementById('detailStatusRow');
     if (t.estado === 'pendiente') {
@@ -1199,6 +1266,42 @@
     }
 
     abrirModal('detailModal');
+  };
+
+  window.consultarYMostrarVuelo = async function(numeroVuelo, fechaISO) {
+    const box = document.getElementById('vueloInfoBox');
+    if (!box) return;
+    box.innerHTML = `<div style="text-align:center; padding:10px; color:var(--muted); font-size:.8rem;">Consultando vuelo…</div>`;
+
+    const r = await consultarLlegadaVuelo(numeroVuelo, fechaISO);
+
+    if (r.error === 'config') {
+      box.innerHTML = `<div style="background:var(--bg3); border-radius:8px; padding:10px; font-size:.78rem; color:var(--muted);">
+        ⚠️ Falta configurar la llave de la API de vuelos. Ve al archivo <code>index.html</code>, busca <code>AERODATABOX_KEY</code> y pega tu llave de RapidAPI.
+      </div>`;
+      return;
+    }
+    if (r.error === 'no_encontrado') {
+      box.innerHTML = `<div style="background:var(--bg3); border-radius:8px; padding:10px; font-size:.78rem; color:var(--muted);">No se encontró información para el vuelo ${escapeHtml(numeroVuelo)} en esa fecha.</div>`;
+      return;
+    }
+    if (r.error) {
+      box.innerHTML = `<div style="background:var(--bg3); border-radius:8px; padding:10px; font-size:.78rem; color:var(--danger);">❌ No se pudo consultar el vuelo (error de conexión o de la API).</div>`;
+      return;
+    }
+
+    const horaMostrar = r.real ? fmtHoraLocalAPI(r.real) : (r.estimada ? fmtHoraLocalAPI(r.estimada) : fmtHoraLocalAPI(r.programada));
+    const etiquetaHora = r.real ? 'Hora real de llegada' : (r.estimada ? 'Hora estimada de llegada' : 'Hora programada de llegada');
+
+    box.innerHTML = `
+      <div style="background:var(--bg3); border-radius:10px; padding:12px; border:1px solid var(--border);">
+        ${!r.esCostaRica ? `<div style="color:var(--warn); font-size:.72rem; margin-bottom:6px;">⚠️ Este vuelo no llega a Costa Rica — mostrando su destino real:</div>` : ''}
+        <div style="font-size:.68rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;">${etiquetaHora}</div>
+        <div style="font-size:1.4rem; font-weight:700; color:var(--accent);">${horaMostrar || '—'}</div>
+        <div style="font-size:.78rem; color:var(--muted); margin-top:4px;">${escapeHtml(r.aeropuerto)}${r.terminal ? ' · Terminal '+escapeHtml(r.terminal) : ''}</div>
+        ${r.estado ? `<div style="font-size:.7rem; color:var(--muted); margin-top:4px;">Estado del vuelo: ${escapeHtml(r.estado)}</div>` : ''}
+      </div>
+    `;
   };
 
   window.cambiarEstado = async function(nuevoEstado) {
